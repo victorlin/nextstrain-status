@@ -46,23 +46,6 @@ jobs:
         with:
           path: build/
 
-  publish:
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    # Timeout to prevent publish job from holding up updates
-    # <https://github.com/nextstrain/status/issues/42>
-    timeout-minutes: 1
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
-
 defaults:
   run:
     # This is the same as GitHub Action's `bash` keyword as of 20 June 2023:
