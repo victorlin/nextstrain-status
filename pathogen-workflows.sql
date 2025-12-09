@@ -14,6 +14,34 @@
  */
 set intervalstyle = 'iso_8601';
 
+-- Helper function for debug logging of head_commit issues
+-- Logs a warning if head_commit is invalid, then attempts extraction (which will error)
+create or replace function get_head_commit_message_with_logging(
+        _run_id bigint,
+        _repo text,
+        _workflow text,
+        _event text,
+        _branch text,
+        _head_commit jsonb
+    )
+    returns text
+    language plpgsql as $$
+begin
+    if _head_commit is null or jsonb_typeof(_head_commit) != 'object' then
+        raise warning 'Invalid head_commit: run_id=%, repo=%, workflow=%, event=%, branch=%, type=%',
+            _run_id,
+            _repo,
+            _workflow,
+            _event,
+            _branch,
+            case when _head_commit is null then 'NULL' else jsonb_typeof(_head_commit) end;
+        -- Let the error happen by trying to extract anyway (will fail, causing build to fail)
+        return _head_commit->>'message';
+    else
+        return _head_commit->>'message';
+    end if;
+end $$;
+
 /* Steampipe's conceit of "it's just tables and SQL" has a tendency to break
  * down in the face of complex queries and reveal cracks in the abstraction.
  * When the query planner really rolls up its sleeves and digs in, it can often
@@ -199,7 +227,8 @@ run_last_attempt as materialized (
         end                             as duration,
         run.event,
         run.head_sha                    as commit_id,
-        run.head_commit->>'message'     as commit_msg,
+        get_head_commit_message_with_logging(run.id, workflow.repository_full_name, workflow.workflow_name, run.event, run.head_branch, run.head_commit)
+                                        as commit_msg,
         --
 
         row_number() over (
@@ -298,7 +327,8 @@ attempt as materialized (
         end                             as duration,
         run.event,
         run.head_sha                    as commit_id,
-        run.head_commit->>'message'     as commit_msg
+        get_head_commit_message_with_logging(run.id, recent.repository_full_name, recent.workflow_name, run.event, run.head_branch, run.head_commit)
+                                        as commit_msg
         --
 
     from
